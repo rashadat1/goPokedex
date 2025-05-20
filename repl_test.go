@@ -1,6 +1,8 @@
 package main
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestCleanInput(t *testing.T) {
 	cleanInputCases := []struct {
@@ -23,6 +25,9 @@ func TestCleanInput(t *testing.T) {
 	}	
 	for _, c := range cleanInputCases {
 		actual := cleanInput(c.input)
+		if len(actual) != len(c.expected) {
+			t.Errorf("Mismatch between length of created list of strings and expected")
+		}
 		for i := range actual {
 			word := actual[i]
 			expectedWord := c.expected[i]
