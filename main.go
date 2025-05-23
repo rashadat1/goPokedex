@@ -104,6 +104,11 @@ func main() {
 		description:    "Displays available pokemon given a location area",
 		callback:       commandExplore,
 	}
+	commandRegistry["catch"] = cliCommand{
+		name:           "catch",
+		description:    "Attempts to catch the pokemon provided as argument - adding it to the user's Pokedex",
+		callback:       commandCatch,
+	}
 	for {
 		_, err := fmt.Fprint(os.Stdout, "Pokedex >")
 		if err != nil {
@@ -245,11 +250,39 @@ func commandMapb(conf *config) error {
 func commandExplore(conf *config) error {
 	baseUrl := "https://pokeapi.co/api/v2/location-area/"
 	areaToSearchUrl := baseUrl + conf.exploreArg
-
-	body, ok := conf.cache.Get(areaToSearchUrl)
-	if !ok {
+	var body []byte
+	res, ok := conf.cache.Get(areaToSearchUrl)
+	if ok {
+		body = res
+	} else {
 		resp, err := http.Get(areaToSearchUrl)
-		
+		if err != nil {
+			fmt.Println("Error sending Get Request to Location-Area Endpoint: " + err.Error())
+			return nil
+		}
+		body, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode > 299 {
+			fmt.Printf("Response failed with status code: %d\n", resp.StatusCode)
+			return nil
+		} else {
+			conf.cache.Add(areaToSearchUrl, body)
+		}
+	}
+	pokemonEncounters := UnmarshaledPokemonEncounters{}
+	err := json.Unmarshal(body, &pokemonEncounters)
+	if err != nil {
+		fmt.Printf("Error processing json response: %s\n", err.Error())
+		return nil
+	}
+	for i := range pokemonEncounters.PokemonEncounters {
+		fmt.Println(pokemonEncounters.PokemonEncounters[i].Pokemon.Name)
 	}
 	return nil
 }
+func commandCatch(conf *config) error {
+	return nil
+}
+
+
+
