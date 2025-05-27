@@ -12,7 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rashadat1/goPokedex/internal/api"
+	"github.com/rashadat1/goPokedex/internal/damageCalculator"
 	"github.com/rashadat1/goPokedex/internal/pokecache"
+	"github.com/rashadat1/goPokedex/internal/pokemonGenerator"
 )
 
 
@@ -30,121 +33,18 @@ type config struct {
 	Cache          *pokecache.Cache
 	ExploreArg     string
 	CatchArg       string
-	Pokedex        map[string]UnmarshaledPokemonInfo
+	Pokedex        map[string]api.UnmarshaledPokemonInfo
 	InspectArg     string
-}
-// A field or function is exported (visible outside package) only if it starts
-// with a capital letter - json.Unmarshal() only sees exported fields
-type LocationName struct {
-	Name           string `json:"name"`
-	Url            string `json:"url"`
-}
-type UnmarshaledLocationAreas struct {
-	Count          int `json:"count"`
-	Next           string `json:"next"`
-	Previous       string `json:"previous"`
-	Results        []LocationName `json:"results"`
-
-}
-
-// Pokemon Encounter in Location-Area Structs
-type MethodData struct {
-	Name               string `json:"name"`
-	Url                string `json:"url"`
-}
-type EncounterData struct {
-	Chance             int `json:"chance"`
-	MaxLevel           int `json:"max_level"`
-	MinLevel           int `json:"min_level"`
-	Method             MethodData `json:"method"`
-}
-type VersionDetails struct {
-	EncounterData      []EncounterData `json:"encounter_details"`	
-}
-type PokemonIdentity struct {
-	Name               string `json:"name"`
-	Url                string `json:"url"`
-}
-type EncounterDetails struct {
-	Pokemon            PokemonIdentity `json:"pokemon"`
-	VersionDetail      []VersionDetails `json:"version_details"`
-}
-type UnmarshaledPokemonEncounters struct {
-	PokemonEncounters  []EncounterDetails `json:"pokemon_encounters"`
-}
-
-// Pokemon Info for Catching Structs
-type AbilityData struct {
-	Ability           Ability `json:"ability"`
-	IsHidden          bool `json:"is_hidden"`
-}
-type Ability struct {
-	Name              string `json:"name"`
-	Url               string `json:"url"`
-}
-type MoveData struct {
-	VersionDetails    []MoveVersionDetail `json:"version_group_details"`
-	Name              string `json:"name"`
-	Url               string `json:"url"`
-}
-type MoveVersionDetail struct {
-	VersionGroup      VersionGroupNameMove `json:"version_group"`
-	MoveLearnMethod   MoveLearnMethod `json:"move_learn_method"`
-	LevelLearnedAt    int `json:"level_learned_at"`
-}
-type VersionGroupNameMove struct {
-	Name              string `json:"name"`
-	Url               string `json:"url"`
-}
-type MoveLearnMethod struct {
-	Name              string `json:"name"` 
-}
-type StatData struct {
-	BaseStat          int `json:"base_stat"`
-	Effort            int `json:"effort"`
-	Stat              Stat `json:"stat"`
-}
-type Stat struct {
-	Name              string `json:"name"`
-	Url               string `json:"url"`
-}
-type TypeData struct {
-	Type              Type `json:"type"`
-	SlotNum           int `json:"slot"`
-}
-type Type struct {
-	Name              string `json:"name"`
-	Url               string `json:"url"`
-}
-type UnmarshaledPokemonInfo struct {
-	Abilities         []AbilityData `json:"abilities"`
-	Moves             []MoveData `json:"moves"`
-	BaseExp           int `json:"base_experience"`
-	BaseStats         []StatData `json:"stats"`
-	Type              []TypeData `json:"types"`
-	Height            float32 `json:"height"`
-	Weight            float32 `json:"weight"`
-	EntryDescr		  string
-	BaseHappiness     int
-	CaptureRate       int
-}
-// Pokemon Species Structs
-type UnmarshaledPokemonSpecies struct {
-	FlavorText        []FlavorText `json:"flavor_text_entries"`
-	BaseHappiness     int `json:"base_happiness"`
-	CaptureRate       int `json:"capture_rate"`
-
-}
-type FlavorText struct {
-	EntryDescr        string `json:"flavor_text"`
+	userPokemon    string
+	oppPokemon     string
 }
 // add struct tags so json decoder can match the Go field with the JSON field
-var userPokedex map[string]UnmarshaledPokemonInfo
+var userPokedex map[string]api.UnmarshaledPokemonInfo
 
 func main() {
 	inputReader := bufio.NewScanner(os.Stdin)
 	cache := pokecache.NewCache(20 * time.Second)
-	userPokedex := make(map[string]UnmarshaledPokemonInfo)
+	userPokedex := make(map[string]api.UnmarshaledPokemonInfo)
 	configuration := config{
 		Next: "https://pokeapi.co/api/v2/location-area?offset=0&limit=20",
 		Prev: "",
@@ -152,6 +52,8 @@ func main() {
 		ExploreArg: "",
 		CatchArg: "",
 		InspectArg: "",
+		userPokemon: "",
+		oppPokemon: "",
 		Pokedex: userPokedex,
 	}
 
@@ -196,6 +98,11 @@ func main() {
 		description:    "Lists all of the pokemon that the user has caught",
 		callback:       commandPokedex,
 	}
+	commandRegistry["battle"] = cliCommand{
+		name:           "battle",
+		description:    "Starts a battle between two pokemon provided as arguments",
+		callback:       commandBattle,
+	}
 	for {
 		_, err := fmt.Fprint(os.Stdout, "Pokedex > ")
 		if err != nil {
@@ -221,6 +128,11 @@ func main() {
 					} else if commandName == "inspect" {
 						configuration.InspectArg = cleanedInput[1]
 					}
+				}
+			} else if commandName == "battle" {
+				if len(cleanedInput) == 3 || len(cleanedInput) == 4 {
+					configuration.userPokemon = cleanedInput[1]
+					configuration.oppPokemon = cleanedInput[2]
 				}
 			}
 			commandData, exists := commandRegistry[commandName]
@@ -291,7 +203,7 @@ func commandMap(conf *config) error {
 			urlCache.Add(conf.Next, body)
 		}
 	}
-	locationArea := UnmarshaledLocationAreas{}
+	locationArea := api.UnmarshaledLocationAreas{}
 	err := json.Unmarshal(body, &locationArea)
 	if err != nil {
 		fmt.Printf("Error processing json response: %s\n", err.Error())
@@ -326,7 +238,7 @@ func commandMapb(conf *config) error {
 			conf.Cache.Add(conf.Prev, body)
 		}
 	}
-	locationArea := UnmarshaledLocationAreas{}
+	locationArea := api.UnmarshaledLocationAreas{}
 	err := json.Unmarshal(body, &locationArea)
 	if err != nil {
 		fmt.Printf("Error processing json response: %s\n", err.Error())
@@ -361,7 +273,7 @@ func commandExplore(conf *config) error {
 			conf.Cache.Add(areaToSearchUrl, body)
 		}
 	}
-	pokemonEncounters := UnmarshaledPokemonEncounters{}
+	pokemonEncounters := api.UnmarshaledPokemonEncounters{}
 	err := json.Unmarshal(body, &pokemonEncounters)
 	if err != nil {
 		fmt.Printf("Error processing json response: %s\n", err.Error())
@@ -419,8 +331,8 @@ func commandCatch(conf *config) error {
 		cache.Add(baseSpeciesUrl + pokemonToCatch, speciesBody)
 	}
 
-	pokemonData := UnmarshaledPokemonInfo{}
-	pokemonSpecies := UnmarshaledPokemonSpecies{}
+	pokemonData := api.UnmarshaledPokemonInfo{}
+	pokemonSpecies := api.UnmarshaledPokemonSpecies{}
 	err := json.Unmarshal(body, &pokemonData)
 	if err != nil {
 		fmt.Printf("Error processing json response: %s\n", err.Error())
@@ -494,4 +406,96 @@ func commandPokedex(conf *config) error {
 		fmt.Printf(" - %s\n", pokemonName)
 	}
 	return nil
+}
+func commandBattle(conf *config) error {
+	userPokemon := conf.userPokemon
+	oppPokemon := conf.oppPokemon
+
+	fmt.Printf("Battle started between %s and %s!\n", userPokemon, oppPokemon)
+	
+	userPokemonInstance, errUser := pokemongenerator.GeneratePokemon(userPokemon, 50)
+	oppPokemonInstance, errOpp := pokemongenerator.GeneratePokemon(oppPokemon, 50)
+	if errUser != nil {
+		fmt.Printf("Error creating instances of Pokemon %s: %s\n", userPokemon, errUser.Error())
+	}
+	if errOpp != nil {
+		fmt.Printf("Error creating instance of Pokemon %s: %s\n", oppPokemon, errOpp.Error())
+	}
+	turnNum := 0
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Printf("Turn %d\n", turnNum)
+		fmt.Printf("----------------------------------\n")
+		fmt.Printf("User Pokemon:\n")
+		fmt.Printf("Lvl. %d %s\n", userPokemonInstance.Level, userPokemonInstance.Species)
+		fmt.Printf("Current HP: %d\n", userPokemonInstance.CurrHp)
+		fmt.Printf("Ability: %s\n", userPokemonInstance.Ability)
+		fmt.Printf("Nature: %s\n", userPokemonInstance.Nature)
+		fmt.Printf("----------------------------------\n")
+		fmt.Printf("Opp Pokemon:\n")
+		fmt.Printf("Lvl. %d %s\n", oppPokemonInstance.Level, oppPokemonInstance.Species)
+		fmt.Printf("Current HP: %d\n", oppPokemonInstance.CurrHp)
+		fmt.Printf("Ability: %s\n", oppPokemonInstance.Ability)
+		fmt.Printf("Nature: %s\n", oppPokemonInstance.Nature)
+			
+		userDamageDealt := damageCalculator.BasicDamageCalculator(userPokemonInstance, oppPokemonInstance)
+		oppDamageDealt := damageCalculator.BasicDamageCalculator(oppPokemonInstance, userPokemonInstance)
+		fmt.Println()
+		fmt.Printf("What do you want to do? run? fight?\n")
+		scanner.Scan()
+
+		choice := cleanInput(scanner.Text())[0]
+		switch choice {
+		case "run":
+			fmt.Println("You ran away safely!")
+			return nil
+		case "fight":
+			fmt.Println("User Damage Done: ", userDamageDealt)
+			fmt.Println("Foe's Damage Done: ", oppDamageDealt)	
+			if userPokemonInstance.Stats["speed"].StatValue > oppPokemonInstance.Stats["speed"].StatValue {
+				// determine which pokemon moves first
+				oppPokemonInstance.CurrHp -= userDamageDealt
+				fmt.Printf("The user's %s used \"attack\" on the foe's %s\n", userPokemonInstance.Species, oppPokemonInstance.Species)
+				if oppPokemonInstance.CurrHp <= 0 {
+					oppPokemonInstance.CurrHp = 0
+					fmt.Printf("The foe's %s has fainted\n", oppPokemonInstance.Species)
+					fmt.Println("You win!")
+					return nil
+				} else {
+					userPokemonInstance.CurrHp -= oppDamageDealt
+					fmt.Printf("The foe's %s used \"attack\" on the user's %s\n", oppPokemonInstance.Species, userPokemonInstance.Species)
+					if userPokemonInstance.CurrHp <= 0 {
+						userPokemonInstance.CurrHp = 0
+						fmt.Printf("Your %s has fained\n", userPokemonInstance.Species)
+						fmt.Println("You lose!")
+						return nil
+					}
+				}
+			} else {
+				userPokemonInstance.CurrHp -= oppDamageDealt
+				fmt.Printf("The foe's %s used \"attack\" on the user's %s\n", oppPokemonInstance.Species, userPokemonInstance.Species)
+
+				if userPokemonInstance.CurrHp <= 0 {
+					userPokemonInstance.CurrHp = 0
+					fmt.Printf("Your %s has fainted\n", userPokemonInstance.Species)
+					fmt.Println("You lose!")
+					return nil
+				} else {
+					oppPokemonInstance.CurrHp -= userDamageDealt
+					fmt.Printf("The user's %s used \"attack\" on the foe's %s\n", userPokemonInstance.Species, oppPokemonInstance.Species)
+
+					if oppPokemonInstance.CurrHp <= 0 {
+						oppPokemonInstance.CurrHp = 0
+						fmt.Printf("The foe's %s has fainted\n", oppPokemonInstance.Species)
+						fmt.Println("You win!")
+						return nil
+					}
+				}
+			}
+			turnNum += 1
+		default:
+			fmt.Println("Invalid choice")
+			continue
+		}
+	}
 }
