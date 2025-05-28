@@ -66,6 +66,8 @@ type MoveList struct {
 	TutorMoves       []string
 }
 
+var moveCache = make(map[string]*api.MoveDetail)
+
 
 
 func GeneratePokemon(species string, level int) (Pokemon, error) {
@@ -196,7 +198,6 @@ func GeneratePokemon(species string, level int) (Pokemon, error) {
 	CreateLearnset(species, pokemonData)
 	return pokemonInstance, nil
 }
-
 func CreateLearnset(species string, pokemonData api.UnmarshaledPokemonInfo) MoveList{
 	var versionGroups = [25]string{
 		"scarlet-violet",
@@ -267,7 +268,6 @@ func CreateLearnset(species string, pokemonData api.UnmarshaledPokemonInfo) Move
 	return moveList
 
 }
-
 func getMostRecentVersion(moveData []api.MoveData, versionGroups [25]string) string {
 	for _, versionName := range versionGroups {
 		// we loop through beginning with the most recent version 
@@ -282,15 +282,36 @@ func getMostRecentVersion(moveData []api.MoveData, versionGroups [25]string) str
 	}
 	return ""
 }
-
-/*
-type MoveList struct {
-	LevelUpMoves     map[int][]string
-	MachineMoves     []string
-	EggMoves         []string
-	TutorMoves       []string
-}
-*/
-func GetMoveDetail(moveName string) *MoveDetail {
+func GetMoveDetail(moveName string) *api.MoveDetail {
+	moveBaseUrl := "https://pokeapi.co/api/v2/move/"
+	fullMoveUrl := moveBaseUrl + moveName
 	
+	if val, ok := moveCache[moveName]; ok {
+		return val
+	}
+
+	resp, err := http.Get(fullMoveUrl)
+	if err != nil {
+		fmt.Println("Error sending Get Request to Move endpoint: " + err.Error())
+		return &api.MoveDetail{}
+	}
+	if resp.StatusCode > 299 {
+		if resp.StatusCode == 404 {
+			fmt.Printf("%s is not a Pokemon move - please use a valid move name\n", moveName)
+		}
+		fmt.Printf("Get Request to Move endpoint returned error with status code: %d\n", resp.StatusCode)
+		return &api.MoveDetail{}
+
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	moveDetailData := api.MoveDetail{}
+	err = json.Unmarshal(body, &moveDetailData)
+	if err != nil {
+		fmt.Println("Error processing json response to Move endpoint: " + err.Error())
+		return &api.MoveDetail{}
+	}
+	moveCache[moveName] = &moveDetailData
+	return &moveDetailData
 }

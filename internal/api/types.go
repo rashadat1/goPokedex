@@ -153,3 +153,8 @@ type CategoryType struct {
 	Name             string `json:"name"`
 	Url              string `json:"url"`
 }
+type MoveInstance struct {
+	Name             string
+	RemainingPP      int
+	Detail           *MoveDetail
+}
