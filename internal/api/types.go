@@ -50,6 +50,9 @@ type Ability struct {
 }
 type MoveData struct {
 	VersionDetails    []MoveVersionDetail `json:"version_group_details"`
+	Move			  Move `json:"move"`
+}
+type Move struct {
 	Name              string `json:"name"`
 	Url               string `json:"url"`
 }
@@ -102,4 +105,51 @@ type UnmarshaledPokemonSpecies struct {
 }
 type FlavorText struct {
 	EntryDescr        string `json:"flavor_text"`
+}
+type MoveDetail struct {
+	Name             string `json:"name"`
+	Power            int `json:"power"`
+	PP               int `json:"pp"`
+	Priority         int `json:"priority"`
+	Accuracy         int `json:"accuracy"`
+	DamageClass      DamageClass `json:"damage_class"`
+	EffectChance     int `json:"effect_chance"`
+	Type             Type `json:"type"`
+	Target           TargetType `json:"target"`
+	StatChange       []StatChange `json:"stat_changes"` 
+	Meta             MetaMoveData `json:"meta"`
+}
+type DamageClass struct {
+	Name             string `json:"name"`
+	Url              string `json:"url"`
+}
+type TargetType struct {
+	Name             string `json:"name"`
+	Url              string `json:"url"`
+}
+type StatChange struct {
+	Change           int `json:"change"`
+	Stat             Stat `json:"stat"`
+}
+type MetaMoveData struct {
+	Ailment          AilmentData `json:"ailment"`
+	AilmentChance    int `json:"ailment_chance"`
+	Category         CategoryType `json:"category"`
+	CritRate         int `json:"crit_rate"`
+	Drain            int `json:"drain"`
+	FlinchChance     int `json:"flinch_chance"`
+	Healing          int `json:"healing"`
+	MaxHits          int `json:"max_hits"`
+	MaxTurns         int `json:"max_turns"`
+	MinHits          int `json:"min_hits"`
+	MinTurns         int `json:"min_turns"`
+	StatChance       int `json:"stat_chance"`
+}
+type AilmentData struct {
+	Name             string `json:"name"`
+	Url              string `json:"url"`
+}
+type CategoryType struct {
+	Name             string `json:"name"`
+	Url              string `json:"url"`
 }

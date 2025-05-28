@@ -59,6 +59,15 @@ type AilmentStatChange struct {
 	Change           float32
 }
 
+type MoveList struct {
+	LevelUpMoves     map[int][]string
+	MachineMoves     []string
+	EggMoves         []string
+	TutorMoves       []string
+}
+
+
+
 func GeneratePokemon(species string, level int) (Pokemon, error) {
 	// method to generate new instance of pokemon - create wild and npc pokemon
 	// nature, evs, ivs are random (evs should be zero for wild pokemon)
@@ -184,7 +193,104 @@ func GeneratePokemon(species string, level int) (Pokemon, error) {
 		Nature: natures[rand.Intn(len(natures))],
 		Ability: pokemonData.Abilities[rand.Intn(numAbilities)].Ability.Name,
 	}
-
+	CreateLearnset(species, pokemonData)
 	return pokemonInstance, nil
 }
 
+func CreateLearnset(species string, pokemonData api.UnmarshaledPokemonInfo) MoveList{
+	var versionGroups = [25]string{
+		"scarlet-violet",
+		"legends-arceus",
+		"brilliant-diamond-and-shining-pearl",
+		"the-crown-tundra",
+		"the-isle-of-armor",
+		"sword-shield",
+		"lets-go-pikachu-lets-go-eevee",
+		"ultra-sun-ultra-moon",
+		"sun-moon",
+		"omega-ruby-alpha-sapphire",
+		"x-y",
+		"black-2-white-2",
+		"xd",
+		"colosseum",
+		"black-white",
+		"heartgold-soulsilver",
+		"platinum",
+		"diamond-pearl",
+		"firered-leafgreen",
+		"emerald",
+		"ruby-sapphire",
+		"crystal",
+		"gold-silver",
+		"yellow",
+		"red-blue",
+	}
+	moveData := pokemonData.Moves
+	
+	mostRecentVersion := getMostRecentVersion(moveData, versionGroups)
+	fmt.Printf("Most recent version for %s is %s\n", species, mostRecentVersion)
+	
+	moveList := MoveList{
+		LevelUpMoves: make(map[int][]string),
+		EggMoves: []string{},
+		TutorMoves: []string{},
+		MachineMoves: []string{},
+	}
+	for _, move := range moveData {
+		versionDetailsForMove := move.VersionDetails
+		for _, versionDetail := range versionDetailsForMove {
+			if versionDetail.VersionGroup.Name == mostRecentVersion {
+				if versionDetail.MoveLearnMethod.Name == "level-up" {
+					_, ok := moveList.LevelUpMoves[versionDetail.LevelLearnedAt]
+					if !ok {
+						moveList.LevelUpMoves[versionDetail.LevelLearnedAt] = []string{move.Move.Name}
+					} else {
+						levelUpMoves := moveList.LevelUpMoves[versionDetail.LevelLearnedAt]
+						moveList.LevelUpMoves[versionDetail.LevelLearnedAt] = append(levelUpMoves, move.Move.Name)
+					}
+				} else if versionDetail.MoveLearnMethod.Name == "egg" {
+					eggMoves := moveList.EggMoves
+					eggMoves = append(eggMoves, move.Move.Name)
+					moveList.EggMoves = eggMoves
+				} else if versionDetail.MoveLearnMethod.Name == "tutor" {
+					tutorMoves := moveList.TutorMoves
+					tutorMoves = append(tutorMoves, move.Move.Name)
+					moveList.TutorMoves = tutorMoves
+				} else if versionDetail.MoveLearnMethod.Name == "machine" {
+					machineMoves := moveList.MachineMoves
+					machineMoves = append(machineMoves, move.Move.Name)
+					moveList.MachineMoves = machineMoves
+				}
+			}
+		}
+	}
+	return moveList
+
+}
+
+func getMostRecentVersion(moveData []api.MoveData, versionGroups [25]string) string {
+	for _, versionName := range versionGroups {
+		// we loop through beginning with the most recent version 
+		for _, move := range moveData {
+			versionDetailsForMove := move.VersionDetails
+			for _, versionDetail := range versionDetailsForMove {
+				if versionDetail.VersionGroup.Name == versionName {
+					return versionName
+				}
+			}
+		}
+	}
+	return ""
+}
+
+/*
+type MoveList struct {
+	LevelUpMoves     map[int][]string
+	MachineMoves     []string
+	EggMoves         []string
+	TutorMoves       []string
+}
+*/
+func GetMoveDetail(moveName string) *MoveDetail {
+	
+}

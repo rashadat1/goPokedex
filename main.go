@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ type config struct {
 	CatchArg       string
 	Pokedex        map[string]api.UnmarshaledPokemonInfo
 	InspectArg     string
+	LearnsetArg    string
 	userPokemon    string
 	oppPokemon     string
 }
@@ -52,6 +54,7 @@ func main() {
 		ExploreArg: "",
 		CatchArg: "",
 		InspectArg: "",
+		LearnsetArg: "",
 		userPokemon: "",
 		oppPokemon: "",
 		Pokedex: userPokedex,
@@ -103,6 +106,11 @@ func main() {
 		description:    "Starts a battle between two pokemon provided as arguments",
 		callback:       commandBattle,
 	}
+	commandRegistry["learnset"] = cliCommand{
+		name:           "learnset",
+		description:    "Lists all of the moves that may be learned by a pokemon",
+		callback:       commandLearnset,
+	}
 	for {
 		_, err := fmt.Fprint(os.Stdout, "Pokedex > ")
 		if err != nil {
@@ -116,7 +124,7 @@ func main() {
 		cleanedInput := cleanInput(rawInput)
 		if len(cleanedInput) >= 1 {
 			commandName := cleanedInput[0]
-			if commandName == "explore" || commandName == "catch" || commandName == "inspect" {
+			if commandName == "explore" || commandName == "catch" || commandName == "inspect" || commandName == "learnset" {
 				if len(cleanedInput) != 2 {
 					fmt.Printf("%s command takes 1 argument %d\n were given", commandName, len(cleanedInput) - 1)
 					continue
@@ -127,6 +135,8 @@ func main() {
 						configuration.CatchArg = cleanedInput[1]
 					} else if commandName == "inspect" {
 						configuration.InspectArg = cleanedInput[1]
+					} else if commandName == "learnset" {
+						configuration.LearnsetArg = cleanedInput[1]
 					}
 				}
 			} else if commandName == "battle" {
@@ -498,4 +508,122 @@ func commandBattle(conf *config) error {
 			continue
 		}
 	}
+}
+func commandLearnset(conf *config) error {
+	var body []byte
+	var speciesBody []byte
+	pokemonToListMoves := conf.LearnsetArg
+	cache := conf.Cache
+
+	basePokemonUrl := "https://pokeapi.co/api/v2/pokemon/"
+	baseSpeciesUrl := "https://pokeapi.co/api/v2/pokemon-species/"
+	
+	res, ok := cache.Get(basePokemonUrl + pokemonToListMoves)
+	resSpec, ok_ := cache.Get(baseSpeciesUrl + pokemonToListMoves)
+	if ok && ok_ {
+		body = res
+		speciesBody = resSpec
+	} else {
+		resp, err := http.Get(basePokemonUrl + pokemonToListMoves)
+		if err != nil {
+			fmt.Printf("Error sending Get Request to Pokemon Endpoint: %s\n", err.Error())
+			return nil
+		}
+		if resp.StatusCode > 299 {
+			if resp.StatusCode == 404 {
+				fmt.Printf("%s is not a Pokemon - please choose a valid Pokemon to catch\n", pokemonToListMoves)
+				return nil
+			}
+			fmt.Printf("Received error as response with status code: %d\n", resp.StatusCode)
+			return nil
+		}
+		body, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		respSpecies, err := http.Get(baseSpeciesUrl + pokemonToListMoves)
+		if err != nil {
+			fmt.Printf("Error sending Get Request to Pokemon Endpoint: %s\n", err.Error())
+			return nil
+		}
+		if resp.StatusCode > 299 {
+			fmt.Printf("Received error as response with status code: %d\n", resp.StatusCode)
+			return nil
+		}
+		speciesBody, err = io.ReadAll(respSpecies.Body)
+		respSpecies.Body.Close()
+		// cache both endpoint responses
+		cache.Add(basePokemonUrl + pokemonToListMoves, body)
+		cache.Add(baseSpeciesUrl + pokemonToListMoves, speciesBody)
+	}
+
+	pokemonData := api.UnmarshaledPokemonInfo{}
+	pokemonSpecies := api.UnmarshaledPokemonSpecies{}
+	err := json.Unmarshal(body, &pokemonData)
+	if err != nil {
+		fmt.Printf("Error processing json response: %s\n", err.Error())
+		return nil
+	}
+	err = json.Unmarshal(speciesBody, &pokemonSpecies)
+	if err != nil {
+		fmt.Printf("Error processing json response: %s\n", err.Error())
+		return nil
+	}
+	pokemonData.BaseHappiness = pokemonSpecies.BaseHappiness
+	pokemonData.CaptureRate = pokemonSpecies.CaptureRate
+	pokemonData.EntryDescr = pokemonSpecies.FlavorText[0].EntryDescr	
+	
+	moveList := pokemongenerator.CreateLearnset(pokemonToListMoves, pokemonData)
+
+	fmt.Println("Learnset:")
+	fmt.Println("==================================")
+
+	// Level-Up Moves
+	fmt.Println("Moves Learned By Leveling:")
+	if len(moveList.LevelUpMoves) == 0 {
+		fmt.Println("  None")
+	} else {
+		levels := make([]int, 0, len(moveList.LevelUpMoves))
+		for level := range moveList.LevelUpMoves {
+			levels = append(levels, level)
+		}
+		sort.Ints(levels)
+		for _, level := range levels {
+			for _, move := range moveList.LevelUpMoves[level] {
+				fmt.Printf("  Lv. %d: %s\n", level, move)
+			}
+		}
+	}
+
+	// Egg Moves
+	fmt.Println("\nEgg Moves:")
+	if len(moveList.EggMoves) == 0 {
+		fmt.Println("  None")
+	} else {
+		for _, move := range moveList.EggMoves {
+			fmt.Printf("  - %s\n", move)
+		}
+	}
+
+	// Tutor Moves
+	fmt.Println("\nTutor Moves:")
+	if len(moveList.TutorMoves) == 0 {
+		fmt.Println("  None")
+	} else {
+		for _, move := range moveList.TutorMoves {
+			fmt.Printf("  - %s\n", move)
+		}
+	}
+
+	// Machine Moves
+	fmt.Println("\nMachine Moves:")
+	if len(moveList.MachineMoves) == 0 {
+		fmt.Println("  None")
+	} else {
+		for _, move := range moveList.MachineMoves {
+			fmt.Printf("  - %s\n", move)
+		}
+	}
+
+
+	return nil
 }

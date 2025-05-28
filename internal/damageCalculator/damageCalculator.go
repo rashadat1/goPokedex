@@ -3,16 +3,12 @@ package damageCalculator
 import (
 	"math/rand"
 	"time"
-	"fmt"
 
 	pokemongenerator "github.com/rashadat1/goPokedex/internal/pokemonGenerator"
 )
 
 func BasicDamageCalculator(attacker, defender pokemongenerator.Pokemon) int {
 	power := 50
-	fmt.Printf("Attacker Level: %d\n", attacker.Level)
-	fmt.Printf("Attacker Attack: %d\n", attacker.Stats["attack"].StatValue)
-	fmt.Printf("Defender Defense: %d\n\n", defender.Stats["defense"].StatValue)
 	inner := ((((2 * attacker.Level) / 5 + 2) * power * (attacker.Stats["attack"].StatValue / defender.Stats["defense"].StatValue)) / 50) + 2
 	
 	newSource := rand.NewSource(time.Now().UnixNano())
