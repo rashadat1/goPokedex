@@ -460,8 +460,12 @@ func commandBattle(conf *config) error {
 			fmt.Println("You ran away safely!")
 			return nil
 		case "fight":
-			fmt.Println("User Damage Done: ", userDamageDealt)
-			fmt.Println("Foe's Damage Done: ", oppDamageDealt)	
+			fmt.Println("Choose a move:")
+			for i, move := range userPokemonInstance.Moves {
+				fmt.Printf("%d. %s (PP: %d, Type: %s, Power: %v, Accuracy: %v)\n", i+1,
+				move.Detail.Name, move.RemainingPP, move.Detail.Type.Name,
+				move.Detail.Power, move.Detail.Accuracy)
+			}
 			if userPokemonInstance.Stats["speed"].StatValue > oppPokemonInstance.Stats["speed"].StatValue {
 				// determine which pokemon moves first
 				oppPokemonInstance.CurrHp -= userDamageDealt

@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,7 +20,7 @@ type Pokemon struct {
 	Species          string
 	Level            int
 	CurrHp           int
-	Moves			 map[string]Move
+	Moves		     [4]*api.MoveInstance
 	Ability			 string
 	Nature           string
 	Stats            map[string]BundleStats
@@ -30,35 +31,6 @@ type BundleStats struct {
 	IVValue          int
 	EffortValue      int
 }
-// some of the fields here can be enums and some need to be structs
-type Move struct {
-	Name             string
-	Power            int
-	Accuracy         int
-	PP               int
-	StatChance       int
-	DamageClass      string
-	Target           string
-	Ailment          Ailment
-	StatChange       []StatChange
-	Description      string
-	AilmentChance    int
-}
-type StatChange struct {
-	Stat             string
-	Amount           int
-	Target           string // self or opponent
-}
-type Ailment struct {
-	Name             string
-	Damage           float32
-	StatEffect       []AilmentStatChange
-}
-type AilmentStatChange struct {
-	Stat             string
-	Change           float32
-}
-
 type MoveList struct {
 	LevelUpMoves     map[int][]string
 	MachineMoves     []string
@@ -195,7 +167,46 @@ func GeneratePokemon(species string, level int) (Pokemon, error) {
 		Nature: natures[rand.Intn(len(natures))],
 		Ability: pokemonData.Abilities[rand.Intn(numAbilities)].Ability.Name,
 	}
-	CreateLearnset(species, pokemonData)
+	moveList := CreateLearnset(species, pokemonData)
+
+	knowableMoves := []string{}
+
+	knowableMoves = append(knowableMoves, moveList.EggMoves...)
+	knowableMoves = append(knowableMoves, moveList.MachineMoves...)
+	knowableMoves = append(knowableMoves, moveList.TutorMoves...)
+	selectedIndices := []int{}
+	for i := 0; i <= level; i++ {
+		learnedAtLevel, ok := moveList.LevelUpMoves[i]
+		if ok {
+			knowableMoves = append(knowableMoves, learnedAtLevel...)
+		}
+	}
+	for {
+		if len(selectedIndices) == 4 {
+			break
+		}
+		index := rand.Intn(len(knowableMoves))
+		if !slices.Contains(selectedIndices, index) {
+			selectedIndices = append(selectedIndices, index)
+		}
+
+	}
+	chosenMoveNames := []string{}
+	for i,_ := range selectedIndices {
+		chosenMoveNames = append(chosenMoveNames, knowableMoves[selectedIndices[i]])
+
+	}
+	chosenMoveInstances := [4]*api.MoveInstance{}
+	for i, moveName := range chosenMoveNames {
+		moveDetailData := GetMoveDetail(moveName)
+		moveInstance := api.MoveInstance{
+			RemainingPP: moveDetailData.PP,
+			Detail: moveDetailData,
+		}
+		chosenMoveInstances[i] = &moveInstance
+	}
+	pokemonInstance.Moves = chosenMoveInstances
+
 	return pokemonInstance, nil
 }
 func CreateLearnset(species string, pokemonData api.UnmarshaledPokemonInfo) MoveList{
