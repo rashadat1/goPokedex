@@ -17,6 +17,7 @@ import (
 	"github.com/rashadat1/goPokedex/internal/damageCalculator"
 	"github.com/rashadat1/goPokedex/internal/pokecache"
 	"github.com/rashadat1/goPokedex/internal/pokemonGenerator"
+	"github.com/rashadat1/goPokedex/internal/typeRelations"
 )
 
 
@@ -421,6 +422,12 @@ func commandBattle(conf *config) error {
 	userPokemon := conf.userPokemon
 	oppPokemon := conf.oppPokemon
 
+	typeRelationsCache, _ := typeRelations.GetTypeRelations()
+	
+	fmt.Println("Type Effectiveness Data for Fire Type")
+	for key, value := range typeRelationsCache.TypeMap["fire"].Effectiveness {
+		fmt.Printf("%s: %v\n", key, value)
+	}
 	fmt.Printf("Battle started between %s and %s!\n", userPokemon, oppPokemon)
 	
 	userPokemonInstance, errUser := pokemongenerator.GeneratePokemon(userPokemon, 50)
@@ -431,7 +438,7 @@ func commandBattle(conf *config) error {
 	if errOpp != nil {
 		fmt.Printf("Error creating instance of Pokemon %s: %s\n", oppPokemon, errOpp.Error())
 	}
-	turnNum := 0
+	turnNum := 1
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Printf("Turn %d\n", turnNum)

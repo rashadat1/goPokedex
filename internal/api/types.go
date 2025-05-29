@@ -157,3 +157,26 @@ type MoveInstance struct {
 	RemainingPP      int
 	Detail           *MoveDetail
 }
+type AllTypes struct {
+	TypesList        []TypeData
+}
+type TypeRelationsUnmarshal struct {
+	Name             string `json:"name"`
+	DamageRelations  ReceivedRelations `json:"damage_relations"`
+
+}
+type ReceivedRelations struct {
+	DoubleDmgFrom    []Type `json:"double_damage_from"`
+	DoubleDmgTo      []Type `json:"double_damage_to"`
+	HalfDmgFrom      []Type `json:"half_damage_from"`
+	HalfDmgTo        []Type `json:"half_damage_to"`
+	NoDmgFrom        []Type `json:"no_damage_from"`
+	NoDmgTo          []Type `json:"no_damage_to"`
+}
+type TypeEffect struct {
+	TypeMap          map[string]Relations
+}
+type Relations struct {
+	Effectiveness    map[string]float32
+}
+
