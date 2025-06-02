@@ -40,17 +40,29 @@ func HandleMoveCategories(attacker, defender *pokemongenerator.Pokemon, move *ap
 		return &MoveOutcome{Missed: true}
 	}
 	moveCategory := move.Meta.Category.Name
+	moveOutcome := MoveOutcome{
+		TargetStatChanges: make(map[string]int),
+		UserStatChanges: make(map[string]int),
+		Missed: false,
+	}
 	switch moveCategory {
 	case "damage":
 		
 		if move.Meta.MinHits != 0 {
-			calcExecutedHits(move.Meta.MinHits, move.Meta.MaxHits, move, battleContext.Rng)
+			numHits := calcExecutedHits(move.Meta.MinHits, move.Meta.MaxHits, battleContext.Rng)
+			moveOutcome.NumHits = numHits
+		} else {
+			moveOutcome.NumHits = 1
+		}
+		if move.Meta.FlinchChance != 0 {
+			causeFlinch := rollFlinched(move.Meta.FlinchChance, battleContext.Rng)
+			moveOutcome.Flinched = causeFlinch
 		}
 	}
-	return &MoveOutcome{}
+	return &moveOutcome
 }
 
-func calcExecutedHits(minHits, maxHits int, move *api.MoveDetail, rng *rand.Rand) int {
+func calcExecutedHits(minHits, maxHits int, rng *rand.Rand) int {
 	if minHits == maxHits {
 		return minHits
 	}
@@ -68,15 +80,16 @@ func calcExecutedHits(minHits, maxHits int, move *api.MoveDetail, rng *rand.Rand
 	return numHits
 }
 
+func rollFlinched(flinchChance int, rng *rand.Rand) bool{
+	return rng.Intn(100) < flinchChance
+}
+
 func handleAccuracyCheck(attacker, defender *pokemongenerator.Pokemon, move *api.MoveDetail, battleContext api.BattleContext) bool {
 	if move.Accuracy == 0 {
 		// exempt from accuracy check - target the user or never miss (ie aerial ace // shockwave)
 		return true
 	}
-	modAccuracy := float64(move.Accuracy) * getAccuracyMultiplier(attacker.AccuracyStage) / getAccuracyMultiplier(defender.EvasionStage)
-	if modAccuracy > 100 {
-		modAccuracy = 100
-	}
+	modAccuracy := min(float64(move.Accuracy) * getAccuracyMultiplier(attacker.AccuracyStage) / getAccuracyMultiplier(defender.EvasionStage), 100)
 	rng := battleContext.Rng
 
 	return float64(rng.Intn(100)) < modAccuracy
