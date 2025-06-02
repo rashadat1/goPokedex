@@ -1,5 +1,7 @@
 package api
 
+import "math/rand"
+
 type LocationName struct {
 
 	Name           string `json:"name"`
@@ -179,4 +181,6 @@ type TypeEffect struct {
 type Relations struct {
 	Effectiveness    map[string]float32
 }
-
+type BattleContext struct {
+	Rng            *rand.Rand
+}

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +42,7 @@ type config struct {
 	userPokemon    string
 	oppPokemon     string
 }
+
 // add struct tags so json decoder can match the Go field with the JSON field
 var userPokedex map[string]api.UnmarshaledPokemonInfo
 
@@ -167,7 +169,7 @@ func cleanInput(text string) []string {
 	var cleanedInput []string
 	for _, element := range textStrings {
 		if element != "" {
-			cleanedInput = append(cleanedInput, strings.Trim(strings.ToLower(element), "\r\n ,"))
+			cleanedInput = append(cleanedInput, strings.Trim(strings.ToLower(element), "\r\n. ,"))
 		}
 	}
 	return cleanedInput
@@ -419,14 +421,30 @@ func commandPokedex(conf *config) error {
 	return nil
 }
 func commandBattle(conf *config) error {
+	moveBaseUrlOne := "https://pokeapi.co/api/v2/move/pin-missile"
+	//moveBaseUrlTwo := "https://pokeapi.co/api/v2/move/tackle"
+
+	resp, _ := http.Get(moveBaseUrlOne)
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	moveDetailData := api.MoveDetail{}
+	_ = json.Unmarshal(body, &moveDetailData)
+
+	fmt.Println("Pin-Missile Data:")
+	fmt.Println(moveDetailData.Meta.Ailment.Name)
+	fmt.Println(moveDetailData.Meta.CritRate)
+	fmt.Println(moveDetailData.Meta.MinHits)
+	fmt.Println(moveDetailData.Meta.MaxTurns)
+
 	userPokemon := conf.userPokemon
 	oppPokemon := conf.oppPokemon
 
 	typeRelationsCache, _ := typeRelations.GetTypeRelations()
+	fmt.Println(typeRelationsCache.TypeMap["fire"])
 	
-	fmt.Println("Type Effectiveness Data for Fire Type")
-	for key, value := range typeRelationsCache.TypeMap["fire"].Effectiveness {
-		fmt.Printf("%s: %v\n", key, value)
+	battleContext := api.BattleContext{
+		Rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 	fmt.Printf("Battle started between %s and %s!\n", userPokemon, oppPokemon)
 	
@@ -455,8 +473,8 @@ func commandBattle(conf *config) error {
 		fmt.Printf("Ability: %s\n", oppPokemonInstance.Ability)
 		fmt.Printf("Nature: %s\n", oppPokemonInstance.Nature)
 			
-		userDamageDealt := damageCalculator.BasicDamageCalculator(userPokemonInstance, oppPokemonInstance)
-		oppDamageDealt := damageCalculator.BasicDamageCalculator(oppPokemonInstance, userPokemonInstance)
+		userDamageDealt := damageCalculator.BasicDamageCalculator(userPokemonInstance, oppPokemonInstance, &battleContext)
+		oppDamageDealt := damageCalculator.BasicDamageCalculator(oppPokemonInstance, userPokemonInstance, &battleContext)
 		fmt.Println()
 		fmt.Printf("What do you want to do? run? fight?\n")
 		scanner.Scan()
@@ -467,12 +485,25 @@ func commandBattle(conf *config) error {
 			fmt.Println("You ran away safely!")
 			return nil
 		case "fight":
-			fmt.Println("Choose a move:")
-			for i, move := range userPokemonInstance.Moves {
-				fmt.Printf("%d. %s (PP: %d, Type: %s, Power: %v, Accuracy: %v)\n", i+1,
-				move.Detail.Name, move.RemainingPP, move.Detail.Type.Name,
-				move.Detail.Power, move.Detail.Accuracy)
+			var moveIndexChoice int
+			for {
+				fmt.Println("Choose a move (1, 2, 3, or 4)")
+				for i, move := range userPokemonInstance.Moves {
+					fmt.Printf("%d. %s (PP: %d, Type: %s, Power: %v, Accuracy: %v)\n", i+1,
+					move.Detail.Name, move.RemainingPP, move.Detail.Type.Name,
+					move.Detail.Power, move.Detail.Accuracy)
+				}
+				scanner.Scan()
+				isValid, idx := isValidMoveChoice(userPokemonInstance, scanner.Text())
+				if isValid {
+					moveIndexChoice = idx
+					break
+				}
 			}
+			userChosenMove := userPokemonInstance.Moves[moveIndexChoice - 1]
+			fmt.Println(userChosenMove.Detail.Name)
+
+
 			if userPokemonInstance.Stats["speed"].StatValue > oppPokemonInstance.Stats["speed"].StatValue {
 				// determine which pokemon moves first
 				oppPokemonInstance.CurrHp -= userDamageDealt
@@ -637,4 +668,20 @@ func commandLearnset(conf *config) error {
 
 
 	return nil
+}
+func isValidMoveChoice(userPokemonInstance pokemongenerator.Pokemon, userChoice string) (bool, int) {
+	moveIndexChoice, err := strconv.Atoi(strings.Trim(userChoice, " \r\n."))
+	if err != nil {
+		fmt.Println("Error converting string to integer: " + err.Error())
+		return false, -999
+	}
+	if moveIndexChoice > 4 || moveIndexChoice < 0 {
+		fmt.Println("Please make a choice between 1 and 4")
+		return false, -999
+	}
+	if userPokemonInstance.Moves[moveIndexChoice - 1].RemainingPP == 0 {
+		fmt.Println("%s out of PP and is unusable\n", userPokemonInstance.Moves[moveIndexChoice - 1].Detail.Name)
+		return false, -999
+	}
+	return true, moveIndexChoice
 }

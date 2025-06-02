@@ -24,6 +24,8 @@ type Pokemon struct {
 	Ability			 string
 	Nature           string
 	Stats            map[string]BundleStats
+	AccuracyStage    int
+	EvasionStage     int
 }
 type BundleStats struct {
 	StatValue        int
@@ -39,8 +41,6 @@ type MoveList struct {
 }
 
 var moveCache = make(map[string]*api.MoveDetail)
-
-
 
 func GeneratePokemon(species string, level int) (Pokemon, error) {
 	// method to generate new instance of pokemon - create wild and npc pokemon
@@ -240,7 +240,6 @@ func CreateLearnset(species string, pokemonData api.UnmarshaledPokemonInfo) Move
 	moveData := pokemonData.Moves
 	
 	mostRecentVersion := getMostRecentVersion(moveData, versionGroups)
-	fmt.Printf("Most recent version for %s is %s\n", species, mostRecentVersion)
 	
 	moveList := MoveList{
 		LevelUpMoves: make(map[int][]string),
