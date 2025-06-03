@@ -181,6 +181,97 @@ type TypeEffect struct {
 type Relations struct {
 	Effectiveness    map[string]float32
 }
+// persistent battle state for battling pokemon
 type BattleContext struct {
-	Rng            *rand.Rand
+	Rng                *rand.Rand
+	PokemonStates      map[*Pokemon]PokemonBattleState
+}
+/*
+type PokemonBattleState struct {
+	SemiInvulnerable   bool
+	HasAilment         bool
+	AilmentName        string
+	NumTurnsAilment    int
+	MaxTurnsAilment    int
+	IsRecharging       bool
+	IsCharging         bool
+	IsRampaging        bool
+	IsLockedIn         bool // for rollout and ice-ball
+	IsTrapped          bool
+	NumTurnsTrapped    int
+	MaxTurnsTrapped    int
+	MinTurnsTrapped    int
+	TurnLockedIn       int
+	MoveBeingUsed      string
+}
+*/
+type PokemonBattleState struct {
+	SemiInvuln         *SemiInvulnState
+	Ailment            *AilmentState
+	Trapped            *TrappedState
+	Confused           *ConfusedState
+	LockedIn           *LockedInState
+	Charging           *ChargingState
+	Recharging         bool
+	Rampaging          *RampageState
+	StatStages         map[string]int
+	ActiveMove         string 
+}
+type SemiInvulnState struct {
+	Move               *MoveDetail
+	Turn               int
+}
+type AilmentState struct {
+	Name               string
+	Turns              int
+	MaxTurns           int // for volatile conditions 
+}
+type TrappedState struct {
+	Move               *MoveDetail
+	MaxTurns           int
+	CurrentTurns       int
+}
+type ConfusedState struct {
+	MaxTurns           int
+	CurrentTurns       int
+}
+type LockedInState struct {
+	Move               *MoveDetail
+	MaxTurns           int
+	CurrentTurns       int
+}
+type ChargingState struct {
+	Move			   *MoveDetail
+	NumTurns           int
+	CurrentTurns       int
+}
+type RampageState struct {
+	Move 			   *MoveDetail
+	MaxTurns           int
+	CurrentTurns       int
+	WillConfuse        bool
+}
+type Pokemon struct {
+	Species          string
+	Level            int
+	CurrHp           int
+	Moves		     [4]*MoveInstance
+	Ability			 string
+	Type             []string
+	Nature           string
+	Stats            map[string]BundleStats
+	AccuracyStage    int
+	EvasionStage     int
+}
+type BundleStats struct {
+	StatValue        int
+	EVValue          int
+	IVValue          int
+	EffortValue      int
+}
+type MoveList struct {
+	LevelUpMoves     map[int][]string
+	MachineMoves     []string
+	EggMoves         []string
+	TutorMoves       []string
 }

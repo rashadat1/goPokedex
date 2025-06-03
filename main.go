@@ -445,9 +445,11 @@ func commandBattle(conf *config) error {
 	
 	battleContext := api.BattleContext{
 		Rng: rand.New(rand.NewSource(time.Now().UnixNano())),
+		PokemonStates: make(map[*api.Pokemon]api.PokemonBattleState),
 	}
+
 	fmt.Printf("Battle started between %s and %s!\n", userPokemon, oppPokemon)
-	
+		
 	userPokemonInstance, errUser := pokemongenerator.GeneratePokemon(userPokemon, 50)
 	oppPokemonInstance, errOpp := pokemongenerator.GeneratePokemon(oppPokemon, 50)
 	if errUser != nil {
@@ -456,6 +458,14 @@ func commandBattle(conf *config) error {
 	if errOpp != nil {
 		fmt.Printf("Error creating instance of Pokemon %s: %s\n", oppPokemon, errOpp.Error())
 	}
+
+	battleContext.PokemonStates[&userPokemonInstance] = api.PokemonBattleState{
+		StatStages: make(map[string]int),
+	}
+	battleContext.PokemonStates[&oppPokemonInstance] = api.PokemonBattleState{
+		StatStages: make(map[string]int),
+	}
+
 	turnNum := 1
 	scanner := bufio.NewScanner(os.Stdin)
 	for {

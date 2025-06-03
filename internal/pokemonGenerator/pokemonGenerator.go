@@ -16,33 +16,11 @@ import (
 
 // we want to take a pokemon species, map of evs, map of ivs, level
 
-type Pokemon struct {
-	Species          string
-	Level            int
-	CurrHp           int
-	Moves		     [4]*api.MoveInstance
-	Ability			 string
-	Nature           string
-	Stats            map[string]BundleStats
-	AccuracyStage    int
-	EvasionStage     int
-}
-type BundleStats struct {
-	StatValue        int
-	EVValue          int
-	IVValue          int
-	EffortValue      int
-}
-type MoveList struct {
-	LevelUpMoves     map[int][]string
-	MachineMoves     []string
-	EggMoves         []string
-	TutorMoves       []string
-}
+
 
 var moveCache = make(map[string]*api.MoveDetail)
 
-func GeneratePokemon(species string, level int) (Pokemon, error) {
+func GeneratePokemon(species string, level int) (api.Pokemon, error) {
 	// method to generate new instance of pokemon - create wild and npc pokemon
 	// nature, evs, ivs are random (evs should be zero for wild pokemon)
 	// use species to get base 
@@ -82,15 +60,15 @@ func GeneratePokemon(species string, level int) (Pokemon, error) {
 	respPokemon, err := http.Get(basePokemonUrl + species)
 	if err != nil {
 		fmt.Printf("Error sending Get Request to Pokemon Endpoint: %s\n", err.Error())
-		return Pokemon{}, err
+		return api.Pokemon{}, err
 	}
 	if respPokemon.StatusCode > 299 {
 		if respPokemon.StatusCode == 404 {
 			fmt.Printf("%s is not a Pokemon - please choose a valid Pokemon\n", species)
-			return Pokemon{}, err
+			return api.Pokemon{}, err
 		}
 		fmt.Printf("Received error as response with status code: %d\n", respPokemon.StatusCode)
-		return Pokemon{}, err
+		return api.Pokemon{}, err
 	}
 	bodyPokemon, err := io.ReadAll(respPokemon.Body)
 	respPokemon.Body.Close()
@@ -98,11 +76,11 @@ func GeneratePokemon(species string, level int) (Pokemon, error) {
 	respSpecies, err := http.Get(baseSpeciesUrl + species)
 	if err != nil {
 		fmt.Printf("Error sending Get Request to Species Endpoint: %s\n", err.Error())
-		return Pokemon{}, err
+		return api.Pokemon{}, err
 	}
 	if respSpecies.StatusCode > 299 {
 		fmt.Printf("Recieved error as response with status code: %d\n", respSpecies.StatusCode)
-		return Pokemon{}, err
+		return api.Pokemon{}, err
 	}
 	bodySpecies, err := io.ReadAll(respSpecies.Body)
 	respSpecies.Body.Close()
@@ -112,18 +90,18 @@ func GeneratePokemon(species string, level int) (Pokemon, error) {
 	err = json.Unmarshal(bodyPokemon, &pokemonData)
 	if err != nil {
 		fmt.Printf("Error processing json response from Pokemon Endpoint: %s\n", err.Error())
-		return Pokemon{}, err
+		return api.Pokemon{}, err
 	}
 	err = json.Unmarshal(bodySpecies, &speciesData)
 	if err != nil {
 		fmt.Printf("Error processing json response from Species Endpoint: %s\n", err.Error())
-		return Pokemon{}, err
+		return api.Pokemon{}, err
 	}
 	pokemonData.BaseHappiness = speciesData.BaseHappiness
 	pokemonData.CaptureRate = speciesData.CaptureRate
 	pokemonData.EntryDescr = speciesData.FlavorText[0].EntryDescr
 
-	stats := make(map[string]BundleStats)
+	stats := make(map[string]api.BundleStats)
 	for _, stat := range statNames {
 		var effort int
 		for _, statEntry := range pokemonData.BaseStats {
@@ -131,7 +109,7 @@ func GeneratePokemon(species string, level int) (Pokemon, error) {
 				effort = statEntry.Effort
 			}
 		}
-		stats[stat] = BundleStats{
+		stats[stat] = api.BundleStats{
 			EVValue: 0,
 			IVValue: rand.Intn(32),
 			EffortValue: effort,
@@ -157,12 +135,17 @@ func GeneratePokemon(species string, level int) (Pokemon, error) {
 	}
 	numAbilities := len(pokemonData.Abilities)
 	
+	typeNames := make([]string, len(pokemonData.Type))
+	for i, t := range pokemonData.Type {
+		typeNames[i] = t.Type.Name
+	}
 
 	hpStat := stats["hp"]
-	pokemonInstance := Pokemon{	
+	pokemonInstance := api.Pokemon{	
 		Species: species,
 		CurrHp: hpStat.StatValue,
 		Level: level,
+		Type: typeNames,
 		Stats: stats,
 		Nature: natures[rand.Intn(len(natures))],
 		Ability: pokemonData.Abilities[rand.Intn(numAbilities)].Ability.Name,
@@ -209,7 +192,7 @@ func GeneratePokemon(species string, level int) (Pokemon, error) {
 
 	return pokemonInstance, nil
 }
-func CreateLearnset(species string, pokemonData api.UnmarshaledPokemonInfo) MoveList{
+func CreateLearnset(species string, pokemonData api.UnmarshaledPokemonInfo) api.MoveList{
 	var versionGroups = [25]string{
 		"scarlet-violet",
 		"legends-arceus",
@@ -241,7 +224,7 @@ func CreateLearnset(species string, pokemonData api.UnmarshaledPokemonInfo) Move
 	
 	mostRecentVersion := getMostRecentVersion(moveData, versionGroups)
 	
-	moveList := MoveList{
+	moveList := api.MoveList{
 		LevelUpMoves: make(map[int][]string),
 		EggMoves: []string{},
 		TutorMoves: []string{},
