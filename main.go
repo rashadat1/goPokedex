@@ -486,16 +486,54 @@ func commandBattle(conf *config) error {
 		userDamageDealt := damageCalculator.BasicDamageCalculator(userPokemonInstance, oppPokemonInstance, &battleContext)
 		oppDamageDealt := damageCalculator.BasicDamageCalculator(oppPokemonInstance, userPokemonInstance, &battleContext)
 		fmt.Println()
+
+		if battleContext.PokemonStates[&userPokemonInstance].ActiveMove != "" {
+			// there is an active move so we should handle it - in this case we do not let the user run or select Moves
+			continue
+		}
 		fmt.Printf("What do you want to do? run? fight?\n")
 		scanner.Scan()
-
 		choice := cleanInput(scanner.Text())[0]
+
+		switch choice {
+		case "run":
+			fmt.Println("You got away safely!")
+			return nil
+		case "fight":
+			var moveIndexChoice int
+			for {
+				fmt.Println("Choose a move (1, 2, 3, or 4)")
+				for i, move := range userPokemonInstance.Moves {
+					fmt.Printf("%d. %s (PP: %d, Type: %s, Power: %v, Accuracy: %v)\n", i+1,
+					move.Detail.Name, move.RemainingPP, move.Detail.Type.Name,
+					move.Detail.Power, move.Detail.Accuracy)
+				}
+				scanner.Scan()
+				isValid, idx := isValidMoveChoice(userPokemonInstance, scanner.Text())
+				if isValid {
+					moveIndexChoice = idx
+					break
+				}
+			}
+
+			userChosenMove := userPokemonInstance.Moves[moveIndexChoice - 1]
+			enemyChosenMove := oppPokemonInstance.Moves[battleContext.Rng.Intn(4) + 1] // for now lets just have it choose randomly
+			if userPokemonInstance.Stats["speed"].StatValue > oppPokemonInstance.Stats["speed"].StatValue {
+				damageCalculator.InitializedSpecialMove(&userPokemonInstance, &oppPokemonInstance, userChosenMove, battleContext)
+				damageCalculator.InitializedSpecialMove(&oppPokemonInstance, &userPokemonInstance, enemyChosenMove, battleContext)
+			} else {
+				damageCalculator.InitializedSpecialMove(&oppPokemonInstance, &userPokemonInstance, enemyChosenMove, battleContext)
+				damageCalculator.InitializedSpecialMove(&userPokemonInstance, &oppPokemonInstance, userChosenMove, battleContext)
+			}
+		}
+
 		switch choice {
 		case "run":
 			fmt.Println("You ran away safely!")
 			return nil
 		case "fight":
 			var moveIndexChoice int
+			
 			for {
 				fmt.Println("Choose a move (1, 2, 3, or 4)")
 				for i, move := range userPokemonInstance.Moves {
@@ -679,7 +717,7 @@ func commandLearnset(conf *config) error {
 
 	return nil
 }
-func isValidMoveChoice(userPokemonInstance pokemongenerator.Pokemon, userChoice string) (bool, int) {
+func isValidMoveChoice(userPokemonInstance api.Pokemon, userChoice string) (bool, int) {
 	moveIndexChoice, err := strconv.Atoi(strings.Trim(userChoice, " \r\n."))
 	if err != nil {
 		fmt.Println("Error converting string to integer: " + err.Error())
@@ -690,7 +728,7 @@ func isValidMoveChoice(userPokemonInstance pokemongenerator.Pokemon, userChoice 
 		return false, -999
 	}
 	if userPokemonInstance.Moves[moveIndexChoice - 1].RemainingPP == 0 {
-		fmt.Println("%s out of PP and is unusable\n", userPokemonInstance.Moves[moveIndexChoice - 1].Detail.Name)
+		fmt.Printf("%s out of PP and is unusable\n", userPokemonInstance.Moves[moveIndexChoice - 1].Detail.Name)
 		return false, -999
 	}
 	return true, moveIndexChoice

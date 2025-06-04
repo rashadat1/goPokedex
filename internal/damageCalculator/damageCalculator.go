@@ -1,6 +1,7 @@
 package damageCalculator
 
 import (
+	"fmt"
 	"math/rand"
 	"slices"
 
@@ -18,7 +19,7 @@ type MoveOutcome struct {
 	UserStatChanges           map[string]int
 	Missed                    bool
 	Flinched                  bool
-	Charging                  bool
+	Message                   string 
 }
 // special handling for these classes of moves
 var RampageMoves = map[string]bool{
@@ -46,6 +47,7 @@ var ChargingMoves = map[string]bool{
 	"solar-blade": true,
 	"geomancy": true,
 	"ice-burn": true,
+	"focus-punch": true,
 }
 var RechargingMoves = map[string]bool{
     "hyper-beam": true,
@@ -134,52 +136,198 @@ func BasicDamageCalculator(attacker, defender api.Pokemon, battleContext *api.Ba
 func DamageCalculator(attacker, defender api.Pokemon, typeRelations api.TypeEffect, moveIndexChose int) int {
 	return 42
 }
-func HandleMoveCategories(attacker, defender *api.Pokemon, move *api.MoveDetail, battleContext api.BattleContext) *MoveOutcome {
-	battleState := battleContext.PokemonStates[attacker]
+func InitializedSpecialMove(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, battleContext api.BattleContext) int {
+	attackerState := battleContext.PokemonStates[attacker]
+	defenderState := battleContext.PokemonStates[defender]
+
+	move := moveInst.Detail
+
 	if ChargingMoves[move.Name] {
 		if MovesWithSemiInvulnerability[move.Name] {
-			battleState.SemiInvuln = &api.SemiInvulnState{
+			attackerState.SemiInvuln = &api.SemiInvulnState{
 				Move: move,
 				Turn: 1,
 			}
+			attackerState.ActiveMoveKind = "SemiInvuln"
+		} else {
+			attackerState.Charging = &api.ChargingState{
+				Move: move,
+				NumTurns: 2,
+				CurrentTurns: 1,
+			}
 		}
-		battleState.Charging = &api.ChargingState{
-			Move: move,
-			NumTurns: 2,
-			CurrentTurns: 1,
-		}
-		battleState.ActiveMove = move.Name
-		battleContext.PokemonStates[attacker] = battleState
-		return &MoveOutcome{Charging: true}
+
+		attackerState.ActiveMove = move.Name
+		attackerState.ActiveMoveKind = "Charging"
+		
+		battleContext.PokemonStates[attacker] = attackerState
+		return 1
 	}
 	didHit := handleAccuracyCheck(attacker, defender, move, battleContext)
 	if !didHit {
-		return &MoveOutcome{Missed: true}
+		return 2
 	}
-	moveOutcome := MoveOutcome{
-		TargetStatChanges: make(map[string]int),
-		UserStatChanges: make(map[string]int),
-		Missed: false,
-	}
-	
 	if RampageMoves[move.Name] {
-		battleState.Rampaging = &api.RampageState{
+		attackerState.Rampaging = &api.RampageState{
 			Move: move,
 			MaxTurns: battleContext.Rng.Intn(2) + 2, // random number either 2 or 3 
 			CurrentTurns: 1,
 			WillConfuse: true,
 
 		}
-		battleState.ActiveMove = move.Name
-		battleContext.PokemonStates[attacker] = battleState
+		attackerState.ActiveMove = move.Name
+		attackerState.ActiveMoveKind = "Rampage"
+		battleContext.PokemonStates[attacker] = attackerState
+		return 1
 	}
-	
-	handleMultiHit(move.Meta.MinHits, move.Meta.MaxHits, battleContext.Rng, &moveOutcome)
-	handleFlinch(move.Meta.FlinchChance, battleContext.Rng, &moveOutcome)
-	handleRecoil(move.Meta.Drain, &moveOutcome)
+	if TrappingMoves[move.Name] {
+		defenderState.Trapped = &api.TrappedState{
+			Move: move,
+			CurrentTurns: 1,
+			MaxTurns: battleContext.Rng.Intn(2) + 4,
+		}
+		defenderState.CanFlee = false
+		battleContext.PokemonStates[defender] = defenderState
+		return 1
+	}
+	if LockInMoves[move.Name] {
+		attackerState.LockedIn = &api.LockedInState{
+			Move: move,
+			MaxTurns: 5,
+			CurrentTurns: 1,
+		}
+		attackerState.ActiveMove = move.Name
+		attackerState.ActiveMoveKind = "LockedIn"
+		battleContext.PokemonStates[attacker] = attackerState
+		return 1
+	}
+	return 0
 
-	return &moveOutcome
 }
+func HandleMoveExecution(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, battleContext *api.BattleContext) *MoveOutcome {
+	moveInst.RemainingPP--
+	attackerState := battleContext.PokemonStates[attacker]
+	move := moveInst.Detail
+	moveOutcome := &MoveOutcome{
+		TargetStatChanges: make(map[string]int),
+		UserStatChanges: make(map[string]int),
+	}
+
+	switch attackerState.ActiveMoveKind {
+	// handle the case of a semi-invulnerable or charging move on its turn one no miss is possible
+	case "SemiInvuln":
+		semiInvulnData := attackerState.SemiInvuln
+		if semiInvulnData.Turn == 1 {
+			printSemiInvulnMessage(attacker.Species, defender.Species, move.Name, moveOutcome)
+			semiInvulnData.Turn++
+			return moveOutcome
+		}
+	case "Charging":
+		chargingData := attackerState.Charging
+		if chargingData.CurrentTurns < chargingData.NumTurns {
+			printChargingMessage(attacker.Species, move.Name, move.Name)
+			chargingData.CurrentTurns++
+			return moveOutcome
+		}
+	}
+	didHit := handleAccuracyCheck(attacker, defender, move, *battleContext)
+	if !didHit {
+		return &MoveOutcome{
+			Missed: true,
+		}
+	}
+	// if the move did not miss then all moves are handled as they should be
+	moveOutcome.Missed = false
+	
+	handleMultiHit(move.Meta.MinHits, move.Meta.MaxHits, battleContext.Rng, moveOutcome)
+	handleFlinch(move.Meta.FlinchChance, battleContext.Rng, moveOutcome)	
+	
+	damageEngine(attacker, defender, moveInst, battleContext)
+	handleRecoil(move.Meta.Drain, moveOutcome)
+	
+	return moveOutcome
+}
+
+func printSemiInvulnMessage(attackerName, defenderName, moveName string, moveOutcome *MoveOutcome) {
+	switch moveName {
+	case "fly":
+		fmt.Printf("%s flew up high!\n", attackerName)
+	case "bounce":
+		fmt.Printf("%s sprang up!\n", attackerName)
+	case "sky-drop":
+		fmt.Printf("%s took the enemy %s into the sky!", attackerName, defenderName)
+	case "dig":
+		fmt.Printf("%s burrowed its way under the ground!", attackerName)
+	case "dive":
+		fmt.Printf("%s hid underwater!", attackerName)
+	}
+}
+
+func damageEngine(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, battleContext *api.BattleContext) {
+	moveData := moveInst.Detail
+	moveCategory := moveData.Meta.Category.Name
+	switch moveCategory {
+	default:
+		calcDamage()
+		mutateState()
+		calcStatBoost()
+		calcHeal()
+		calcAilment()
+	}
+
+}
+
+func calcDamage() {
+}
+func mutateState() {
+}
+func calcStatBoost() {
+}
+func calcHeal() {
+}
+func calcAilment() {
+}
+func printChargingMessage(attackerName, defenderName, moveName string) {
+	switch moveName {
+	case "solar-beam":
+		fmt.Printf("%s absorbed light!\n", attackerName)
+	case "skull-bash":
+		fmt.Printf("%s lowered its head!\n", attackerName)
+	case "sky-attack":
+		fmt.Printf("%s became cloaked in a harsh light!\n", attackerName)
+	case "meteor-beam":
+		fmt.Printf("%s is overflowing with space power!\n", attackerName)
+	case "razor-wind":
+		fmt.Printf("%s made a whirlwind!\n", attackerName)
+	case "bounce":
+		fmt.Printf("%s sprang up!\n", attackerName)
+	case "dig":
+		fmt.Printf("%s dug a hole!\n", attackerName)
+	case "dive":
+		fmt.Printf("%s hid underwater!\n", attackerName)
+	case "phantom-force":
+		fmt.Printf("%s vanished instantly!\n", attackerName)
+	case "electro-shot":
+		fmt.Printf("%s absorbed electricity!\n", attackerName)
+	case "fly":
+		fmt.Printf("%s flew up high!\n", attackerName)
+	case "shadow-force":
+		fmt.Printf("%s vanished instantly!\n", attackerName)
+	case "freeze-shock":
+		fmt.Printf("%s became cloaked in a freezing light!\n", attackerName)
+	case "sky-drop":
+		fmt.Printf("%s took the enemy %s into the sky!\n", attackerName, defenderName)
+	case "solar-blade":
+		fmt.Printf("%s absorbed light!\n", attackerName)
+	case "geomancy":
+		fmt.Printf("%s is absorbing power!\n", attackerName)
+	case "ice-burn":
+		fmt.Printf("%s became cloaked in freezing air!\n", attackerName)
+	case "focus-punch":
+		fmt.Printf("%s is tightening its focus!\n", attackerName)
+	}
+}
+
 
 func handleMultiHit(minHits, maxHits int, rng *rand.Rand, moveOutcome *MoveOutcome) {
 	if minHits == 0 && maxHits == 0 {

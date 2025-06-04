@@ -216,6 +216,8 @@ type PokemonBattleState struct {
 	Rampaging          *RampageState
 	StatStages         map[string]int
 	ActiveMove         string 
+	ActiveMoveKind     string
+	CanFlee            bool
 }
 type SemiInvulnState struct {
 	Move               *MoveDetail
