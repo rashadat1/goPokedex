@@ -102,6 +102,11 @@ var CrashDamageIfMiss = map[string]bool{
 	"supercell-slam": true,
 	"high-jump-kick": true,
 }
+var CrushGrip = map[string]bool{
+	"crush-grip": true,
+	"hard-press": true,
+	"wring-out": true,
+}
 var MovesWithSemiInvulnerability = map[string]bool{
 	"fly": true,
 	"bounce": true,
@@ -121,7 +126,160 @@ var MovesDamagingSemiVulnerable = map[string][]string{
 var AlwaysHitsUsedByPoisonType = map[string]bool{
 	"toxic": true,
 }
-
+var FixedDamage = map[string]bool{
+	"dragon-rage": true,
+	"sonic-boom": true,
+}
+var CounterAttacks = map[string]bool{
+	"bide": true,
+	"comeuppance": true,
+	"counter": true,
+	"metal-burst": true,
+	"mirror-coat": true,
+}
+var DirectDamageAttacks = map[string]bool{
+	
+}
+var MovesStrongerAgainstMinimized = map[string]bool{
+	"astonish": true,
+	"body-slam": true,
+	"double-iron-bash": true,
+	"dragon-rush": true,
+	"extrasensory": true,
+	"flying-press": true,
+	"heat-crash": true,
+	"heavy-slam": true,
+	"malicious-moonsault": true,
+	"needle-arm": true,
+	"phantom-force": true,
+	"shadow-force": true,
+	"steamroller": true,
+	"stomp": true,
+}
+var MovesCallingOtherMoves = map[string]bool{
+	"assist": true,
+	"copycat": true,
+	"me-first": true,
+	"metronome": true,
+	"mirror-move": true,
+	"nature-power": true,
+	"sleep-talk": true,
+	"snatch": true,
+}
+var MovesDealingDamageBasedOnIncreasedStatStages = map[string]bool{
+	"punishment": true,
+	"power-trip": true,
+}
+var MovesThatCanHealNonVolatileStatus = map[string]bool{
+	"aromatherapy": true,
+	"heal-bell": true,
+	"jungle-healing": true,
+	"lunar-blessing": true,
+	"psycho-shift": true,
+	"purify": true,
+	"refresh": true,
+	"rest": true,
+	"smelling-salts": true,
+	"sparkling-aura": true,
+	"sparkly-swirl": true,
+	"take-heart": true,
+	"uproar": true,
+	"wake-up-slap": true,
+}
+var MovesThatRemoveTypeImmunities = map[string]bool{
+	"foresight": true,
+	"gravity": true,
+	"miracle-eye": true,
+	"odor-sleuth": true,
+	"smack-down": true,
+	"thousand-arrows": true,
+}
+var MoveAffectedByFriendship = map[string]bool{
+	"frustration": true,
+	"pika-papow": true,
+	"return": true,
+	"veevee-volley": true,
+}
+var ScreenCreatingMoves = map[string]bool{
+	"aurora-veil": true,
+	"baddy-bad": true,
+	"glitzy-glow": true,
+	"light-screen": true,
+	"reflect": true,
+}
+var ScreenRemovingMoves = map[string]bool{
+	"brick-break": true,
+	"defog": true,
+	"psychic-fangs": true,
+	"raging-bull": true,
+}
+var MovesThatSwitchTheTargetOut = map[string]bool{
+	"circle-throw": true,
+	"dragon-tail": true,
+	"roar": true,
+	"whirlwind": true,
+}
+var WeatherChangingMoves = map[string]bool{
+	"chilly-reception": true,
+	"defog": true,
+	"hail": true,
+	"rain-dance": true,
+	"sunny-day": true,
+	"sandstorm": true,
+	"snowscape": true,
+}
+var MovesThatSwitchTheUserOut = map[string]bool{
+	"baton-pass": true,
+	"chilly-reception": true,
+	"flip-turn": true,
+	"parting-shot": true,
+	"shed-tail": true,
+	"teleport": true,
+	"u-turn": true,
+	"volt-switch": true,
+}
+var EntryHazardRemove = map[string]bool{
+	"defog": true,
+	"mortal-spin": true,
+	"rapid-spin": true,
+	"tidy-up": true,
+}
+var EntryHazardMoves = map[string]bool{
+	"spikes": true,
+	"stealth-rock": true,
+	"sticky-web": true,
+	"stone-axe": true,
+	"toxic-spikes": true,
+	"ceaseless-edge": true,
+}
+var NonStandardStatUsage = map[string]bool{
+	"body-press": true,
+	"foul-play": true,
+	"psyshock": true,
+	"psystrike": true,
+	"secret-sword": true,
+}
+var MovesThatRaiseCritRate = map[string]bool{
+	"dragon-cheer": true,
+	"focus-energy": true,
+	"triple-arrows": true,
+}
+var MovesThatBreakProtection = map[string]bool{
+	"feint": true,
+	"hyperspace-fury": true,
+	"hyperspace-hole": true,
+	"phantom-force": true,
+	"shadow-force": true,
+}
+var MovesThatDamageThroughProtection = map[string]bool{
+	"hyper-drill": true,
+	"mighty-cleave": true,
+}
+var MovesWithSpecialTypeEffectiveness = map[string]bool{
+	"flying-press": true,
+	"freeze-dry": true,
+	"thousand-arrows": true,
+}
 
 func BasicDamageCalculator(attacker, defender api.Pokemon, battleContext *api.BattleContext) int {
 	power := 50
@@ -242,13 +400,13 @@ func HandleMoveExecution(attacker, defender *api.Pokemon, moveInst *api.MoveInst
 	handleMultiHit(move.Meta.MinHits, move.Meta.MaxHits, battleContext.Rng, moveOutcome)
 	handleFlinch(move.Meta.FlinchChance, battleContext.Rng, moveOutcome)	
 	
-	damageEngine(attacker, defender, moveInst, battleContext)
+	damageEngine(attacker, defender, moveInst, battleContext, moveOutcome)
 	handleRecoil(move.Meta.Drain, moveOutcome)
 	
 	return moveOutcome
 }
 
-func printSemiInvulnMessage(attackerName, defenderName, moveName string, moveOutcome *MoveOutcome) {
+func printSemiInvulnMessage(attackerName, defenderName, moveName string) {
 	switch moveName {
 	case "fly":
 		fmt.Printf("%s flew up high!\n", attackerName)
@@ -263,12 +421,12 @@ func printSemiInvulnMessage(attackerName, defenderName, moveName string, moveOut
 	}
 }
 
-func damageEngine(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, battleContext *api.BattleContext) {
+func damageEngine(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, battleContext *api.BattleContext, moveOutcome *MoveOutcome) {
 	moveData := moveInst.Detail
 	moveCategory := moveData.Meta.Category.Name
 	switch moveCategory {
 	default:
-		calcDamage()
+		calcDamage(attacker, defender, moveInst, battleContext, moveOutcome)
 		mutateState()
 		calcStatBoost()
 		calcHeal()
@@ -277,7 +435,15 @@ func damageEngine(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, b
 
 }
 
-func calcDamage() {
+func calcDamage(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, battleContext *api.BattleContext, moveOutcome *MoveOutcome) {
+	getMovePower(attacker, defender, moveInst, battleContext)
+
+}
+func getMovePower(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, battleContext *api.BattleContext) int{
+	apiPower := moveInst.Detail.Power
+	if apiPower == 0 {
+
+	}
 }
 func mutateState() {
 }
