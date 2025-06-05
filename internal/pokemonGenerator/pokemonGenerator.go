@@ -149,6 +149,7 @@ func GeneratePokemon(species string, level int) (api.Pokemon, error) {
 		Stats: stats,
 		Nature: natures[rand.Intn(len(natures))],
 		Ability: pokemonData.Abilities[rand.Intn(numAbilities)].Ability.Name,
+		Weight: pokemonData.Weight,
 	}
 	moveList := CreateLearnset(species, pokemonData)
 

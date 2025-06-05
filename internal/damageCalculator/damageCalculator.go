@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"slices"
+	"strings"
 
 	"github.com/rashadat1/goPokedex/internal/api"
 )
@@ -376,7 +377,7 @@ func HandleMoveExecution(attacker, defender *api.Pokemon, moveInst *api.MoveInst
 	case "SemiInvuln":
 		semiInvulnData := attackerState.SemiInvuln
 		if semiInvulnData.Turn == 1 {
-			printSemiInvulnMessage(attacker.Species, defender.Species, move.Name, moveOutcome)
+			printSemiInvulnMessage(attacker.Species, defender.Species, move.Name)
 			semiInvulnData.Turn++
 			return moveOutcome
 		}
@@ -426,6 +427,16 @@ func damageEngine(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, b
 	moveCategory := moveData.Meta.Category.Name
 	switch moveCategory {
 	default:
+		if FixedDamage[moveData.Name] {
+			if moveData.Name == "sonic-boom" {
+				moveOutcome.Damage = 20
+				return
+			}
+			if moveData.Name == "dragon-rage" {
+				moveOutcome.Damage = 40
+				return
+			}
+		}
 		calcDamage(attacker, defender, moveInst, battleContext, moveOutcome)
 		mutateState()
 		calcStatBoost()
@@ -442,8 +453,25 @@ func calcDamage(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, bat
 func getMovePower(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, battleContext *api.BattleContext) int{
 	apiPower := moveInst.Detail.Power
 	if apiPower == 0 {
-
+		getNonStandardPower(attacker, defender, moveInst, battleContext)
 	}
+	return 42
+}
+func getNonStandardPower(attacker, defender *api.Pokemon, moveInst *api.MoveInstance, battleContext *api.BattleContext) int{
+	moveName := moveInst.Detail.Name
+	if strings.HasPrefix(moveInst.Detail.Meta.Category.Name, "damage") {
+		// these are damage dealing moves that do not have a fixed power
+		if moveName == "gyro-ball" {
+			return int(calcGyroBallPower(attacker, defender, battleContext))
+		}
+		if moveName == "electro-ball" {
+			return int(calcElectroBallPower(attacker, defender, battleContext))
+		}
+		if PowerBasedOnWeightDiff[moveName] {
+			return int(calcPowerBasedOnWeightDiff(attacker, defender, battleContext))
+		}
+	}
+	return int(42)
 }
 func mutateState() {
 }
@@ -453,6 +481,58 @@ func calcHeal() {
 }
 func calcAilment() {
 }
+func calcGyroBallPower(attacker, defender *api.Pokemon, battleContext *api.BattleContext) float64{
+	attackerSpeed := calcEffectiveStat(attacker, battleContext, "speed")
+	defenderSpeed := calcEffectiveStat(defender, battleContext, "speed")
+
+	damageFormula := (25 * defenderSpeed / attackerSpeed) + 1
+	return min(150.0, damageFormula)
+}
+func calcElectroBallPower(attacker, defender *api.Pokemon, battleContext *api.BattleContext) float64{
+	attackerSpeed := calcEffectiveStat(attacker, battleContext, "speed")
+	defenderSpeed := calcEffectiveStat(defender, battleContext, "speed")
+
+	if attackerSpeed >= 4 * defenderSpeed {
+		return 150
+	}
+	if attackerSpeed >= 3 * defenderSpeed {
+		return 120
+	}
+	if attackerSpeed >= 2 * defenderSpeed {
+		return 80 
+	}
+	if attackerSpeed >= defenderSpeed {
+		return 60
+	}
+	return 40
+}
+func calcPowerBasedOnWeightDiff(attacker, defender *api.Pokemon, battleContext *api.BattleContext) float64{
+	attackerWeight := attacker.Weight
+	defenderWeight := defender.Weight
+
+	if attackerWeight >= 5 * defenderWeight {
+		return 120 
+	}
+	if attackerWeight >= 4 * defenderWeight {
+		return 100 
+	}
+	if attackerWeight >= 3 * defenderWeight {
+		return 80
+	}
+	if attackerWeight >= 2 * defenderWeight {
+		return 60
+	}
+	return 40
+}
+func calcEffectiveStat(pokemon *api.Pokemon, battleContext *api.BattleContext, stat string) float64 {
+	ailmentMod := 1.0
+	multiplier := getStatMultiplier(battleContext.PokemonStates[pokemon].StatStages[stat])
+	if stat == "speed" && battleContext.PokemonStates[pokemon].Ailment.Name == "paralysis" {
+		ailmentMod = 0.5
+	}
+	return float64(pokemon.Stats[stat].StatValue) * multiplier * ailmentMod
+}
+
 func printChargingMessage(attackerName, defenderName, moveName string) {
 	switch moveName {
 	case "solar-beam":
@@ -582,4 +662,36 @@ func getAccuracyMultiplier(stage int) float64 {
     default:
         return 1.0
     }
+}
+func getStatMultiplier(stage int) float64 {
+	switch stage {
+	case -6:
+		return 2.0 / 8.0
+	case -5:
+		return 2.0 / 7.0
+	case -4:
+		return 2.0 / 6.0
+	case -3:
+		return 2.0 / 5.0
+	case -2:
+		return 2.0 / 4.0
+	case -1:
+		return 2.0 / 3.0
+	case 0:
+		return 1.0
+	case 1:
+		return 3.0 / 2.0
+	case 2:
+		return 4.0 / 2.0
+	case 3:
+		return 5.0 / 2.0
+	case 4:
+		return 6.0 / 2.0
+	case 5:
+		return 7.0 / 2.0
+	case 6:
+		return 8.0 / 2.0
+	default:
+		return 1.0
+	}
 }

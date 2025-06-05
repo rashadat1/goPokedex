@@ -217,6 +217,7 @@ type PokemonBattleState struct {
 	StatStages         map[string]int
 	ActiveMove         string 
 	ActiveMoveKind     string
+	UsedMinimize       bool
 	CanFlee            bool
 }
 type SemiInvulnState struct {
@@ -264,6 +265,7 @@ type Pokemon struct {
 	Stats            map[string]BundleStats
 	AccuracyStage    int
 	EvasionStage     int
+	Weight           float32
 }
 type BundleStats struct {
 	StatValue        int
